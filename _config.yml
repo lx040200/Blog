@@ -13,12 +13,16 @@ timezone: "Asia/Shanghai"
 
 # URL
 ## Set your site url here. For example, if you use GitHub Page, set url as 'https://username.github.io/project'
-url: https://your-domain.com
+url: https://lx042.cc.cd
 permalink: :year/:month/:day/:title/
 permalink_defaults:
 pretty_urls:
   trailing_index: true # Set to false to remove trailing 'index.html' from permalinks
   trailing_html: true # Set to false to remove trailing '.html' from permalinks
+
+# 相册图床
+## Cloudflare R2 绑定的自定义域名，相册页从这里取图
+r2_base: https://img.lx042.cc.cd
 
 # Directory
 source_dir: source
@@ -37,7 +41,7 @@ titlecase: false # Transform title into titlecase
 external_link:
   enable: true # Open external links in new tab
   field: site # Apply to the whole site
-  exclude: ""
+  exclude: "img.lx042.cc.cd" # 相册图片域名不做外链改写，否则会破坏灯箱放大
 filename_case: 0
 render_drafts: false
 post_asset_folder: false
