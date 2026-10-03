@@ -97,6 +97,26 @@ function displayName(names, name) {
 }
 
 /**
+ * 相册首页最前面那张「地图」入口卡片
+ *
+ * 它不是一个真实相册（没有自己的照片），所以用图标代替封面。
+ * 这里刻意用抽象的地图钉图标，不画任何地理图形 —— 避免地图合规问题。
+ */
+function renderMapCard() {
+  return [
+    '<a href="/map/" style="display:block;text-decoration:none">',
+    '<div style="width:100%;aspect-ratio:4/3;border-radius:8px;background:#e6f1fb;display:flex;align-items:center;justify-content:center">',
+    '<svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#185fa5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">',
+    '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>',
+    '<circle cx="12" cy="10" r="3"></circle>',
+    '</svg>',
+    '</div>',
+    '<div style="font-size:13px;color:#8a8a8a;text-align:center;margin-top:8px">地图</div>',
+    '</a>'
+  ].join('\n');
+}
+
+/**
  * 「选下一级」的封面卡片
  *
  * ⚠️ 结构上有讲究：<img> 必须**直接**放在 <a> 里面，并且带 no-lightbox 类。
@@ -105,8 +125,10 @@ function displayName(names, name) {
  * 会给「父节点不是 <a> 的图片」自动套一层 <a data-fancybox>。
  * 如果这里在 <a> 和 <img> 之间再夹一层 <figure>，图片的父节点就成了 <figure>，
  * 会被误判为"没被链接包着" —— 结果是点封面弹出看图浮层，而不是进入相册页面。
+ *
+ * isRoot 为 true 时（相册首页），最前面强制插入「地图」卡片。
  */
-function renderCards(entries, names, hexo) {
+function renderCards(entries, names, hexo, isRoot) {
   const cards = entries
     .map(child => {
       const label = escapeHtml(displayName(names, child.name));
@@ -124,7 +146,9 @@ function renderCards(entries, names, hexo) {
     })
     .join('\n');
 
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${CARD_MIN_WIDTH}px,1fr));gap:18px;margin:22px 0;">\n${cards}\n</div>`;
+  const items = isRoot ? `${renderMapCard()}\n${cards}` : cards;
+
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${CARD_MIN_WIDTH}px,1fr));gap:18px;margin:22px 0;">\n${items}\n</div>`;
 }
 
 /** 照片墙 */
@@ -176,9 +200,11 @@ hexo.extend.generator.register('album', function (locals) {
 
   const walk = node => {
     const entries = Array.from(node.children.values());
+    const isRoot = node.parent === null;
     const blocks = [renderCrumb(node, names)];
 
-    if (entries.length) blocks.push(renderCards(entries, names, hexo));
+    // 相册首页即使一张照片都没登记，也要显示「地图」那张卡片，不然整页是空的
+    if (entries.length || isRoot) blocks.push(renderCards(entries, names, hexo, isRoot));
     if (node.photos.length) blocks.push(renderGrid(node.photos, hexo));
 
     pages.push({
