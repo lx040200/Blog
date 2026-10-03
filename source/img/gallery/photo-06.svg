@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
-  <rect width="1200" height="900" fill="#a8a08a"/>
-  <rect x="24" y="24" width="1152" height="852" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
-  <text x="600" y="430" text-anchor="middle" font-family="sans-serif" font-size="150" fill="#ffffff" fill-opacity="0.55">06</text>
-  <text x="600" y="500" text-anchor="middle" font-family="sans-serif" font-size="30" fill="#ffffff" fill-opacity="0.75">示例照片 · 请替换</text>
-</svg>
