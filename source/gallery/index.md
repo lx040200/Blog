@@ -7,8 +7,30 @@ comments: false
 
 随手拍下的一些片段。点开看大图，图下方能打开原图。
 
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:24px 0;">
+## 中国
 
-{% photo IMG20260405150924.jpg "示例照片" %}
+### 上海
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:20px 0;">
+
+{% photo china/shanghai/IMG20260405150924.jpg "上海 · 示例照片" %}
+
+</div>
+
+### 成都
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:20px 0;">
+
+<!-- 成都的照片加在这里，一行一张 -->
+
+</div>
+
+## 日本
+
+### 东京
+
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:20px 0;">
+
+<!-- 东京的照片加在这里，一行一张 -->
 
 </div>
