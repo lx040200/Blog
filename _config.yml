@@ -29,6 +29,12 @@ r2_base: https://img.lx042.cc.cd
 ## transformations —— 用 Cloudflare 实时生成缩略图（需在控制台开启 Images → Transformations）
 image_mode: direct
 
+# 高德地图 Key（地图页用）
+## 到 lbs.amap.com 申请：控制台 → 应用管理 → 创建应用 → 添加 Key
+## Key 类型必须选「Web端(JS API)」，并绑定域名 lx042.cc.cd
+## 把下面这行换成你自己的 Key 就行，别的地方都不用改
+amap_key: REPLACE_WITH_YOUR_AMAP_WEB_KEY
+
 # Directory
 source_dir: source
 public_dir: public

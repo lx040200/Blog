@@ -5,11 +5,12 @@
  * 在高德地图上按坐标打点，点标记看照片。
  *
  * ⚠️ 关于 Key：
- * 生成的 HTML 里，高德 SDK 的地址带一个占位符 —— REPLACE_WITH_YOUR_AMAP_WEB_KEY。
- * 本生成器**不会写入任何真实密钥**。请你自己到 高德开放平台(lbs.amap.com)
- * 申请一个「Web端(JS API)」的 Key，绑定域名 lx042.cc.cd，然后替换掉那个占位符。
+ * 本生成器**不写任何真实密钥**。Key 从 _config.yml 的 amap_key 读取，
+ * 默认值是占位符 REPLACE_WITH_YOUR_AMAP_WEB_KEY。
+ * 你需要到 高德开放平台(lbs.amap.com) 申请一个「Web端(JS API)」的 Key，
+ * 绑定域名 lx042.cc.cd，然后填进 _config.yml 的 amap_key —— 只改那一处。
  *
- * 合规说明：只使用高德地图（符合国内地图合规白名单）；坐标统一为 GCJ-02
+ * 合规说明：只使用高德地图（在合规白名单内）；坐标统一为 GCJ-02
  * （tools/extract-gps.js 已把 EXIF 里的 WGS-84 转换过来）。
  */
 
@@ -17,7 +18,13 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_FILE = path.join(__dirname, '..', 'source', 'photo-map.json');
-const KEY_PLACEHOLDER = 'REPLACE_WITH_YOUR_AMAP_WEB_KEY';
+const DEFAULT_KEY = 'REPLACE_WITH_YOUR_AMAP_WEB_KEY';
+
+/** 从 _config.yml 读高德 Key；没填就用占位符 */
+function readKey(hexo) {
+  const key = String((hexo.config && hexo.config.amap_key) || '').trim();
+  return key || DEFAULT_KEY;
+}
 
 function readData(hexo) {
   if (!fs.existsSync(DATA_FILE)) {
@@ -34,17 +41,14 @@ function readData(hexo) {
   }
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 hexo.extend.generator.register('photo-map', function (locals) {
   const base = String(hexo.config.r2_base || '').replace(/\/+$/, '');
+  const key = readKey(hexo);
   const photos = readData(hexo);
+
+  if (key === DEFAULT_KEY) {
+    hexo.log.warn('[map] _config.yml 里的 amap_key 还是占位符，地图页会加载不出地图。');
+  }
 
   const data = photos.map(p => ({
     p: p.p,
@@ -55,11 +59,6 @@ hexo.extend.generator.register('photo-map', function (locals) {
   }));
 
   const content = `
-<!--
-  ⚠️ 下面是高德地图的 Key 占位符。请替换成你自己的 Key。
-  申请：https://lbs.amap.com → 控制台 → 应用管理 → 创建应用 → 添加 Key
-        Key 类型选「Web端(JS API)」，绑定域名填 lx042.cc.cd
--->
 <div style="font-size:14px;color:#5c6470;margin:0 0 14px">
   这里的每个点，都是一张照片的拍摄地。点标记可以看照片。
 </div>
@@ -67,7 +66,7 @@ hexo.extend.generator.register('photo-map', function (locals) {
 <div id="photo-map" style="width:100%;height:70vh;min-height:420px;border-radius:10px;overflow:hidden;background:#efefe9"></div>
 <p id="photo-map-tip" style="font-size:13px;color:#8a8a8a;margin:12px 0 0"></p>
 
-<script src="https://webapi.amap.com/maps?v=2.0&key=${KEY_PLACEHOLDER}"></script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=${key}"></script>
 <script>
 (function () {
   var BASE = ${JSON.stringify(base)};
@@ -81,10 +80,10 @@ hexo.extend.generator.register('photo-map', function (locals) {
   }
 
   if (typeof AMap === 'undefined') {
-    box.innerHTML = '<div style="padding:24px;font-size:14px;color:#854f0b;line-height:1.7">'
+    box.innerHTML = '<div style="padding:24px;font-size:14px;color:#854f0b;line-height:1.8">'
       + '<strong>地图没能加载。</strong><br>'
-      + '最可能的原因：HTML 里那行高德 SDK 的地址还带着占位符 <code>${KEY_PLACEHOLDER}</code>，'
-      + '请换成你自己申请的 Key（Key 类型要选「Web端(JS API)」，并绑定域名 lx042.cc.cd）。</div>';
+      + '最可能的原因：_config.yml 里的 <code>amap_key</code> 还是占位符，或者 Key 类型不对。'
+      + 'Key 必须是「Web端(JS API)」类型，并且绑定了域名 lx042.cc.cd。</div>';
     return;
   }
 
@@ -118,7 +117,7 @@ hexo.extend.generator.register('photo-map', function (locals) {
   });
 
   // 点聚合：照片多了必然需要，否则缩小后点会叠成一团。
-  // 万一插件加载失败，退回成普通标记，不影响使用。
+  // 万一插件加载失败，退回普通标记，不影响使用。
   map.plugin(['AMap.MarkerClusterer'], function () {
     try {
       new AMap.MarkerClusterer(map, markers, { gridSize: 60, maxZoom: 17 });
@@ -129,8 +128,8 @@ hexo.extend.generator.register('photo-map', function (locals) {
 
   // 打开就缩放到刚好装下所有点
   map.on('complete', function () {
+    if (DATA.length < 2) return;
     try {
-      if (DATA.length === 1) return;
       var lngs = DATA.map(function (d) { return d.lng; });
       var lats = DATA.map(function (d) { return d.lat; });
       map.setBounds(new AMap.Bounds(
