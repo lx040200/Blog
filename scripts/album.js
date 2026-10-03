@@ -96,22 +96,29 @@ function displayName(names, name) {
   return (names && names[name]) || name;
 }
 
-/** 「选下一级」的封面卡片 */
+/**
+ * 「选下一级」的封面卡片
+ *
+ * ⚠️ 结构上有讲究：<img> 必须**直接**放在 <a> 里面，并且带 no-lightbox 类。
+ *
+ * 因为主题的图片灯箱脚本（node_modules/hexo-theme-butterfly/source/js/utils.js）
+ * 会给「父节点不是 <a> 的图片」自动套一层 <a data-fancybox>。
+ * 如果这里在 <a> 和 <img> 之间再夹一层 <figure>，图片的父节点就成了 <figure>，
+ * 会被误判为"没被链接包着" —— 结果是点封面弹出看图浮层，而不是进入相册页面。
+ */
 function renderCards(entries, names, hexo) {
   const cards = entries
     .map(child => {
       const label = escapeHtml(displayName(names, child.name));
       const cover = firstPhoto(child);
       const image = cover
-        ? `<img src="${urls(hexo, cover.path).thumb}" alt="${label}" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:#efefe9">`
+        ? `<img class="no-lightbox" src="${urls(hexo, cover.path).thumb}" alt="${label}" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:#efefe9">`
         : '<div style="width:100%;aspect-ratio:4/3;border-radius:8px;background:#efefe9"></div>';
 
       return [
         `<a href="${pageUrl(child.key)}" style="display:block;text-decoration:none">`,
-        '<figure style="margin:0">',
         image,
-        `<figcaption style="font-size:13px;color:#8a8a8a;text-align:center;margin-top:8px">${label}</figcaption>`,
-        '</figure>',
+        `<div style="font-size:13px;color:#8a8a8a;text-align:center;margin-top:8px">${label}</div>`,
         '</a>'
       ].join('\n');
     })
