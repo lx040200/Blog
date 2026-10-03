@@ -21,6 +21,7 @@ menu:
   首页: / || fas fa-home
   归档: /archives/ || fas fa-archive
   相册: /gallery/ || fas fa-images
+  地图: /map/ || fas fa-map-marked-alt
   标签: /tags/ || fas fa-tags
   分类: /categories/ || fas fa-folder-open
   关于: /about/ || fas fa-heart
