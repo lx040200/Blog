@@ -19,14 +19,32 @@ function baseUrl(hexo) {
   return String((hexo && hexo.config && hexo.config.r2_base) || '').replace(/\/+$/, '');
 }
 
+/**
+ * 图片来源模式，由 _config.yml 里的 image_mode 控制：
+ *   'direct'          —— 直接用原图。（当前使用：照片本身不大，不需要缩略图）
+ *   'transformations' —— 用 Cloudflare 实时生成缩略图（需开启 Images → Transformations）
+ * 不设置时默认 'transformations'。
+ */
+function imageMode(hexo) {
+  const raw = String((hexo && hexo.config && hexo.config.image_mode) || '').trim().toLowerCase();
+  return raw === 'direct' ? 'direct' : 'transformations';
+}
+
 /** 由 R2 路径推出「原图 / 缩略图 / 大图 / 横幅图」四个地址 */
 function urls(hexo, photoPath) {
   const base = baseUrl(hexo);
   const p = normalizePath(photoPath);
+  const original = `${base}/${p}`;
+
+  if (imageMode(hexo) === 'direct') {
+    return { original, thumb: original, view: original, banner: original };
+  }
+
   const sized = (width, quality) =>
     `${base}/cdn-cgi/image/width=${width},quality=${quality},format=auto,onerror=redirect/${p}`;
+
   return {
-    original: `${base}/${p}`,
+    original,
     thumb: sized(800, 80),
     view: sized(1600, 85),
     banner: sized(1800, 80)

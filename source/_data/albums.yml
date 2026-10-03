@@ -16,7 +16,7 @@
 # ============================================================
 
 photos:
-  - china/sichuan/a-ba/1772962664015.jpg | 阿坝 · 清晨
+  - china/sichuan-aba/1772962664015.jpg | 川主寺
 
   # 以后照着上面加行就行，例如：
   # - china/sichuan/chengdu/20260901120000.jpg | 宽窄巷子
@@ -25,8 +25,8 @@ photos:
 
 names:
   china: 中国
-  sichuan: 四川
-  a-ba: 阿坝
+  sichuan-aba: 四川·阿坝
+
   # chengdu: 成都
   # shanghai: 上海
   # japan: 日本

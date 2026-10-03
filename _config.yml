@@ -24,6 +24,11 @@ pretty_urls:
 ## Cloudflare R2 绑定的自定义域名，相册页从这里取图
 r2_base: https://img.lx042.cc.cd
 
+# 图片来源模式
+## direct          —— 直接用原图（当前使用：照片本身只有 1-2MB，不需要缩略图）
+## transformations —— 用 Cloudflare 实时生成缩略图（需在控制台开启 Images → Transformations）
+image_mode: direct
+
 # Directory
 source_dir: source
 public_dir: public
