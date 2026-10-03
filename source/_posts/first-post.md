@@ -6,7 +6,8 @@ tags:
   - 随笔
   - 开始
 cover: /img/cover-1.svg
-top_img: /img/cover-1.svg
+top_img: false
+aside: false
 description: 为什么在这个到处都是社交平台的时代，还要自己搭一个网站。
 ---
 

@@ -6,7 +6,8 @@ tags:
   - 街拍
   - 光
 cover: /img/cover-2.svg
-top_img: /img/cover-2.svg
+top_img: false
+aside: false
 description: 一次早起散步的随手记录。
 ---
 

@@ -1,7 +1,8 @@
 ---
 title: 关于
 date: 2026-10-01 11:00:00
-top_img: /img/cover.svg
+top_img: false
+aside: false
 comments: false
 ---
 

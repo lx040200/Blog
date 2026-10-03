@@ -174,15 +174,15 @@ hexo.extend.generator.register('album', function (locals) {
     if (entries.length) blocks.push(renderCards(entries, names, hexo));
     if (node.photos.length) blocks.push(renderGrid(node.photos, hexo));
 
-    const cover = firstPhoto(node);
-
     pages.push({
       path: node.key ? `${GALLERY_DIR}/${node.key}/index.html` : `${GALLERY_DIR}/index.html`,
       layout: 'page',
       data: {
         title: node.parent ? displayName(names, node.name) : '相册',
         date: new Date(),
-        top_img: cover ? urls(hexo, cover.path).view : '/img/cover.svg',
+        // 沉浸式：相册各级页面都不要顶部大图、不显示侧边栏
+        top_img: false,
+        aside: false,
         comments: false,
         content: blocks.filter(Boolean).join('\n')
       }
