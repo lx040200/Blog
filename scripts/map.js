@@ -107,22 +107,84 @@ hexo.extend.generator.register('photo-map', function (locals) {
     info.open(map, [item.lng, item.lat]);
   }
 
-  var markers = DATA.map(function (item) {
-    var marker = new AMap.Marker({
-      position: [item.lng, item.lat],
-      title: item.c || item.p
-    });
-    marker.on('click', function () { openInfo(item); });
-    return marker;
-  });
+  // ---- 打点 ----
+  //
+  // ⚠️ 高德 JS API 2.0 的点聚合类名是 AMap.MarkerCluster（不是 1.4 的 MarkerClusterer）。
+  //    2.0 的 MarkerCluster 第二个参数要的是【坐标数组】[{lnglat:[lng,lat]}]，
+  //    传 Marker 实例进去不会报错，但一个点都不会渲染（排查了很久才定位到）。
+  //    所以这里：优先用 MarkerCluster，失败则退回普通 Marker。
 
-  // 点聚合：照片多了必然需要，否则缩小后点会叠成一团。
-  // 万一插件加载失败，退回普通标记，不影响使用。
-  map.plugin(['AMap.MarkerClusterer'], function () {
+  function usePlainMarkers() {
+    var list = DATA.map(function (item) {
+      var marker = new AMap.Marker({
+        position: [item.lng, item.lat],
+        title: item.c || item.p,
+        offset: new AMap.Pixel(-7, -7)
+      });
+      marker.setContent(plainIcon());
+      marker.on('click', function () { openInfo(item); });
+      return marker;
+    });
+    map.add(list);
+  }
+
+  // 自绘标记点：不依赖高德默认图标（那个图元资源偶尔会 503）
+  function plainIcon() {
+    return '<div style="width:14px;height:14px;border-radius:50%;background:#185fa5;'
+      + 'border:2px solid #fff;box-shadow:0 0 0 1px rgba(24,95,165,.55);cursor:pointer"></div>';
+  }
+
+  // 点击聚合点/标记时，用坐标回头找是哪张照片（误差 50 米内算命中）
+  function findByLngLat(lnglat) {
+    if (!lnglat) return null;
+    var lng = (lnglat.lng !== undefined) ? lnglat.lng : lnglat[0];
+    var lat = (lnglat.lat !== undefined) ? lnglat.lat : lnglat[1];
+    var best = null;
+    var bestGap = 1e9;
+    DATA.forEach(function (item) {
+      var gap = Math.abs(item.lng - lng) + Math.abs(item.lat - lat);
+      if (gap < bestGap) { bestGap = gap; best = item; }
+    });
+    return bestGap < 0.0006 ? best : null;
+  }
+
+  map.plugin(['AMap.MarkerCluster'], function () {
+    if (typeof AMap.MarkerCluster !== 'function') {
+      usePlainMarkers();
+      return;
+    }
     try {
-      new AMap.MarkerClusterer(map, markers, { gridSize: 60, maxZoom: 17 });
+      var points = DATA.map(function (item) {
+        return { lnglat: [item.lng, item.lat] };
+      });
+
+      var cluster = new AMap.MarkerCluster(map, points, {
+        gridSize: 60,
+        maxZoom: 17,
+        // 单个点（未被聚合）
+        renderMarker: function (ctx) {
+          ctx.marker.setContent(plainIcon());
+          ctx.marker.setOffset(new AMap.Pixel(-7, -7));
+        },
+        // 聚合点：数字气泡
+        renderClusterMarker: function (ctx) {
+          var size = Math.round(28 + Math.min(ctx.count, 60) * 0.4);
+          var div = document.createElement('div');
+          div.style.cssText = 'width:' + size + 'px;height:' + size + 'px;line-height:' + size
+            + 'px;border-radius:50%;background:#185fa5;color:#fff;font-size:13px;text-align:center;'
+            + 'box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer';
+          div.innerHTML = ctx.count;
+          ctx.marker.setOffset(new AMap.Pixel(-size / 2, -size / 2));
+          ctx.marker.setContent(div);
+        }
+      });
+
+      cluster.on('click', function (e) {
+        var hit = findByLngLat(e.lnglat);
+        if (hit) openInfo(hit);
+      });
     } catch (err) {
-      map.add(markers);
+      usePlainMarkers();
     }
   });
 
