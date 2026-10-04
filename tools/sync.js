@@ -52,6 +52,22 @@ async function main() {
   const base = readBase();
   const env = loadEnv();
 
+  // 安全网：模板文件是会被提交到 GitHub 的，一旦有人往里面填真值就是泄露
+  const exampleFile = path.join(ROOT, '.env.local.example');
+  if (fs.existsSync(exampleFile)) {
+    const txt = fs.readFileSync(exampleFile, 'utf8');
+    // 注意：这里必须用 [ \t] 而不是 \s —— \s 会连换行一起吃掉，
+    // 导致空值行也误报（三个占位符空着时是最常见的正常状态）
+    const leaked = /^[ \t]*(?:CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|R2_BUCKET)[ \t]*=[ \t]*\S+/m.test(txt);
+    if (leaked) {
+      console.error('\n🚨 危险：.env.local.example 里被填了真实密钥！');
+      console.error('   ' + exampleFile);
+      console.error('\n   这个文件【会被提交到 GitHub】，是给未来的自己看的模板。');
+      console.error('   请把它的值清空，真密钥只填在 .env.local 里（那个不会进仓库）。');
+      process.exit(1);
+    }
+  }
+
   if (!fs.existsSync(ENV_FILE)) {
     console.error('\n❌ 缺少密钥文件：');
     console.error('   ' + ENV_FILE);
