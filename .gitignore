@@ -6,3 +6,7 @@ node_modules/
 public/
 .deploy*/
 _multiconfig.yml
+
+# 本地密钥（R2 只读访问密钥等）—— 绝对不能提交到 GitHub
+.env
+.env.local
