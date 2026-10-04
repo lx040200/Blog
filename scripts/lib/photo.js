@@ -51,8 +51,15 @@ function urls(hexo, photoPath) {
   };
 }
 
-/** 单张照片的 HTML：缩略图 + 点击看大图 + 原图链接 */
-function renderPhoto(hexo, photoPath, caption) {
+/**
+ * 单张照片的 HTML：缩略图 + 点击看大图 + 图注（说明 / 原图 / 出处）
+ *
+ * @param {object} hexo
+ * @param {string} photoPath  R2 里的对象路径
+ * @param {string} caption    说明文字；为空则图注里不显示说明
+ * @param {object} [source]   可选出处 { title, url }，会显示「出自《标题》→」
+ */
+function renderPhoto(hexo, photoPath, caption, source) {
   const p = normalizePath(photoPath);
   if (!p) return '';
 
@@ -60,19 +67,30 @@ function renderPhoto(hexo, photoPath, caption) {
   if (!base) return '<!-- 还没在 _config.yml 里设置 r2_base，无法生成照片地址 -->';
 
   const u = urls(hexo, p);
-  const alt = escapeHtml(caption || p);
+  const alt = escapeHtml(caption || '');
+
+  const captionHtml = caption ? `<span>${alt}</span>` : '';
+  const originHtml =
+    `<a href="${u.original}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">原图</a>`;
+  const noteLine = [captionHtml, originHtml].filter(Boolean).join(' · ');
+
+  const sourceHtml =
+    source && source.url && source.title
+      ? `\n<div style="font-size:12px;text-align:center;margin-top:4px">` +
+        `<a href="${source.url}" style="color:#185fa5;text-decoration:none">出自《${escapeHtml(source.title)}》 →</a></div>`
+      : '';
 
   return [
     '<figure style="margin:0">',
-    `<a href="${u.view}" data-fancybox="album" data-caption="${alt}">`,
+    `<a href="${u.view}" data-fancybox="album" data-caption="${alt || escapeHtml(p)}">`,
     `<img src="${u.thumb}" alt="${alt}" loading="lazy" class="no-lightbox" style="width:100%;border-radius:8px;display:block">`,
     '</a>',
-    '<figcaption style="font-size:12px;color:#8a8a8a;text-align:center;margin-top:6px">',
-    `<span>${alt}</span>`,
-    ` · <a href="${u.original}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">原图</a>`,
-    '</figcaption>',
+    `<figcaption style="font-size:12px;color:#8a8a8a;text-align:center;margin-top:6px">${noteLine}</figcaption>`,
+    sourceHtml,
     '</figure>'
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 module.exports = { escapeHtml, normalizePath, baseUrl, urls, renderPhoto };

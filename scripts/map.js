@@ -17,7 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_FILE = path.join(__dirname, '..', 'source', 'photo-map.json');
+const DATA_FILE = path.join(__dirname, '..', 'source', '_data', 'photo-map.json');
 const DEFAULT_KEY = 'REPLACE_WITH_YOUR_AMAP_WEB_KEY';
 
 /** 从 _config.yml 读高德 Key；没填就用占位符 */

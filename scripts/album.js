@@ -1,60 +1,103 @@
 /**
  * 相册页面自动生成器
  *
- * 数据来源：source/_data/albums.yml
- *   photos: 一行一张照片，写法 「R2 里的路径 | 说明」
- *   names:  目录名 → 显示的中文名
+ * 照片来源（三处合并去重）：
+ *   A. source/_data/photo-index.json —— tools/sync.js 扫描 R2 得到的全部照片
+ *   B. 文章正文里的 {% photo %}     —— 写文章插图，自动并入相册，并标出「出自《…》」
+ *   C. source/_data/albums.yml 的 photos —— 可选补充清单：给某张写说明、或手动排前面
  *
- * 生成规则（层级完全由照片路径里的斜杠数量决定，不需要你声明）：
- *   某层还有子目录  → 生成「选下一级」的封面卡片
- *   某层没有子目录  → 生成照片墙
- *   两者都有        → 先卡片后照片墙
- *
- * 举例：登记了 china/sichuan/a-ba/1772962664015.jpg，就会生成
- *   /gallery/                        中国
- *   /gallery/china/                  四川
- *   /gallery/china/sichuan/          阿坝（封面自动取该目录下第一张照片）
- *   /gallery/china/sichuan/a-ba/     照片墙
+ * albums.yml 里的 names 负责「英文目录名 → 中文显示名」。
+ * 层级完全由照片路径里的斜杠数量决定，不需要声明：
+ *   某层还有子目录 → 生成「选下一级」的封面卡片；没有子目录 → 生成照片墙。
  */
 
 const { escapeHtml, baseUrl, urls, renderPhoto } = require('./lib/photo');
+const {
+  readIndex,
+  readAlbums,
+  displayName,
+  findByFilename,
+  parsePhotoTags
+} = require('./lib/albumData');
 
 const GALLERY_DIR = 'gallery';
 const CARD_MIN_WIDTH = 190;
 const GRID_MIN_WIDTH = 200;
 
-/** 把 yml 里的 photos 归一化成 [{path, caption}]，兼容字符串和对象两种写法 */
-function normalizePhotos(raw) {
-  if (!Array.isArray(raw)) return [];
+/* ---------------- 把三处来源合并成一份照片清单 ---------------- */
 
-  return raw
-    .map(item => {
-      if (typeof item === 'string') {
-        const s = item.trim();
-        if (!s) return null;
-        const i = s.indexOf('|');
-        return i === -1
-          ? { path: s, caption: '' }
-          : { path: s.slice(0, i).trim(), caption: s.slice(i + 1).trim() };
-      }
-      if (item && typeof item === 'object') {
-        const p = item.path || item.file || item.src || '';
-        return {
-          path: String(p).trim(),
-          caption: String(item.caption || item.title || '').trim()
-        };
-      }
-      return null;
-    })
-    .filter(item => item && item.path);
+function collectPhotos(locals) {
+  const entries = new Map();
+  const albums = readAlbums();
+
+  // C：补充清单最先来 —— 它决定「手写顺序」和说明文字
+  albums.photos.forEach((item, i) => {
+    entries.set(item.path, {
+      path: item.path,
+      caption: item.caption,
+      order: i,
+      source: null
+    });
+  });
+
+  // B：文章里的插图
+  const posts =
+    locals && locals.posts && locals.posts.length ? locals.posts.toArray() : [];
+
+  posts
+    .slice()
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .forEach(post => {
+      parsePhotoTags(post.raw).forEach(tag => {
+        let p = tag.path;
+        // 只写了文件名的情况：去扫描索引里查它的完整路径
+        if (p && !p.includes('/')) {
+          const found = findByFilename(p);
+          if (found) p = found;
+        }
+        if (!p) return;
+
+        const exist = entries.get(p);
+        if (exist) {
+          if (!exist.caption && tag.caption) exist.caption = tag.caption;
+          if (!exist.source) exist.source = { title: post.title, url: '/' + post.path };
+          return;
+        }
+
+        entries.set(p, {
+          path: p,
+          caption: tag.caption || '',
+          order: null,
+          source: { title: post.title, url: '/' + post.path }
+        });
+      });
+    });
+
+  // A：R2 扫描结果（存在但既没进清单、也没进文章的照片）
+  const idx = readIndex();
+  if (idx && Array.isArray(idx.photos)) {
+    idx.photos.forEach(item => {
+      if (entries.has(item.p)) return;
+      entries.set(item.p, {
+        path: item.p,
+        caption: '',
+        order: null,
+        source: null,
+        mtime: item.mtime || ''
+      });
+    });
+  }
+
+  return Array.from(entries.values());
 }
 
-/** 按路径里的斜杠把照片挂成一棵树，顺序沿用清单里的先后 */
-function buildTree(items) {
+/* ---------------- 建树 ---------------- */
+
+function buildTree(photos) {
   const root = { name: '', key: '', parent: null, children: new Map(), photos: [] };
 
-  items.forEach(item => {
-    const segments = item.path.replace(/^\/+/, '').split('/').filter(Boolean);
+  photos.forEach(photo => {
+    const segments = String(photo.path).replace(/^\/+/, '').split('/').filter(Boolean);
     const file = segments.pop();
     if (!file) return;
 
@@ -72,15 +115,25 @@ function buildTree(items) {
       node = node.children.get(segment);
     });
 
-    node.photos.push({ file, path: item.path, caption: item.caption });
+    node.photos.push(photo);
   });
 
   return root;
 }
 
+/** 排序：补充清单里手写的排前面（按清单顺序），其余按文件名（时间由早到晚） */
+function sortPhotos(list) {
+  return list.slice().sort((a, b) => {
+    const ao = a.order == null ? Number.MAX_SAFE_INTEGER : a.order;
+    const bo = b.order == null ? Number.MAX_SAFE_INTEGER : b.order;
+    if (ao !== bo) return ao - bo;
+    return String(a.path).localeCompare(String(b.path));
+  });
+}
+
 /** 取该节点（含子目录）里的第一张照片，用来当封面 */
 function firstPhoto(node) {
-  if (node.photos.length) return node.photos[0];
+  if (node.photos.length) return sortPhotos(node.photos)[0];
   for (const child of node.children.values()) {
     const found = firstPhoto(child);
     if (found) return found;
@@ -92,9 +145,7 @@ function pageUrl(key) {
   return key ? `/${GALLERY_DIR}/${key}/` : `/${GALLERY_DIR}/`;
 }
 
-function displayName(names, name) {
-  return (names && names[name]) || name;
-}
+/* ---------------- 渲染 ---------------- */
 
 /**
  * 相册首页最前面那张「地图」入口卡片
@@ -128,10 +179,10 @@ function renderMapCard() {
  *
  * isRoot 为 true 时（相册首页），最前面强制插入「地图」卡片。
  */
-function renderCards(entries, names, hexo, isRoot) {
+function renderCards(entries, hexo, isRoot) {
   const cards = entries
     .map(child => {
-      const label = escapeHtml(displayName(names, child.name));
+      const label = escapeHtml(displayName(child.name));
       const cover = firstPhoto(child);
       const image = cover
         ? `<img class="no-lightbox" src="${urls(hexo, cover.path).thumb}" alt="${label}" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;display:block;background:#efefe9">`
@@ -153,15 +204,15 @@ function renderCards(entries, names, hexo, isRoot) {
 
 /** 照片墙 */
 function renderGrid(photos, hexo) {
-  const figures = photos
-    .map(photo => renderPhoto(hexo, photo.path, photo.caption || photo.file))
+  const figures = sortPhotos(photos)
+    .map(photo => renderPhoto(hexo, photo.path, photo.caption, photo.source))
     .join('\n');
 
   return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${GRID_MIN_WIDTH}px,1fr));gap:14px;margin:22px 0;">\n${figures}\n</div>`;
 }
 
 /** 面包屑：相册 › 中国 › 四川 */
-function renderCrumb(node, names) {
+function renderCrumb(node) {
   if (!node.parent) return '';
 
   const chain = [];
@@ -176,42 +227,50 @@ function renderCrumb(node, names) {
 
   const parts = [link('相册', '')];
   chain.forEach((item, index) => {
-    const label = displayName(names, item.name);
+    const label = displayName(item.name);
     parts.push(index === chain.length - 1 ? escapeHtml(label) : link(label, item.key));
   });
 
   return `<p style="font-size:13px;color:#8a8a8a;margin:0 0 18px">${parts.join(' <span style="opacity:.45">›</span> ')}</p>`;
 }
 
-hexo.extend.generator.register('album', function (locals) {
-  const data = (locals.data && locals.data.albums) || {};
-  const names = data.names || {};
-  const items = normalizePhotos(data.photos);
+/* ---------------- 生成 ---------------- */
 
+hexo.extend.generator.register('album', function (locals) {
   if (!baseUrl(hexo)) {
     hexo.log.warn('[album] _config.yml 里还没设置 r2_base，相册生成不出照片地址。');
   }
-  if (!items.length) {
-    hexo.log.warn('[album] source/_data/albums.yml 里还没登记照片，相册会是空的。');
+
+  const index = readIndex();
+  if (!index) {
+    hexo.log.warn(
+      '[album] 还没有 source/_data/photo-index.json —— 先在 E:\\Web\\blog 跑 node tools/sync.js'
+    );
   }
 
-  const root = buildTree(items);
+  const photos = collectPhotos(locals);
+  const fromIndex = index && Array.isArray(index.photos) ? index.photos.length : 0;
+  const fromPosts = photos.filter(p => p.source).length;
+
+  const root = buildTree(photos);
   const pages = [];
 
   const walk = node => {
     const entries = Array.from(node.children.values());
     const isRoot = node.parent === null;
-    const blocks = [renderCrumb(node, names)];
+    const blocks = [renderCrumb(node)];
 
-    // 相册首页即使一张照片都没登记，也要显示「地图」那张卡片，不然整页是空的
-    if (entries.length || isRoot) blocks.push(renderCards(entries, names, hexo, isRoot));
+    // 相册首页即使一张照片都没有，也要显示「地图」那张卡片，不然整页是空的
+    if (entries.length || isRoot) blocks.push(renderCards(entries, hexo, isRoot));
     if (node.photos.length) blocks.push(renderGrid(node.photos, hexo));
 
     pages.push({
       path: node.key ? `${GALLERY_DIR}/${node.key}/index.html` : `${GALLERY_DIR}/index.html`,
       layout: 'page',
       data: {
-        title: node.parent ? displayName(names, node.name) : '相册',
+        title: node.parent ? displayName(node.name) : '相册',
+        // 给分享卡片用的一句话描述（不设的话主题会从正文里随便抓，很难看）
+        description: node.parent ? `${displayName(node.name)} 的照片` : '按地点整理的照片',
         date: new Date(),
         // 沉浸式：相册各级页面都不要顶部大图、不显示侧边栏
         top_img: false,
@@ -226,6 +285,8 @@ hexo.extend.generator.register('album', function (locals) {
 
   walk(root);
 
-  hexo.log.info(`[album] 生成相册页面 ${pages.length} 个`);
+  hexo.log.info(
+    `[album] 生成相册页面 ${pages.length} 个（照片 ${photos.length} 张；R2 扫描 ${fromIndex} 张，其中 ${fromPosts} 张出现在文章里）`
+  );
   return pages;
 });
