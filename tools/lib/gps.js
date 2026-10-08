@@ -5,7 +5,9 @@
  * 不用下载整张（原图动辄 8MB）。极少数 EXIF 特别大的，会自动整张重下一次。
  */
 
+const fs = require('fs');
 const exifr = require('exifr');
+const yaml = require('js-yaml');
 
 const HEAD_BYTES = 256 * 1024;
 
@@ -101,6 +103,97 @@ async function readGps(url) {
   return { lat: gcjLat, lng: gcjLng, taken };
 }
 
+/* ---------------- 手写坐标补充表 ---------------- */
+
+/**
+ * 解析一条坐标。支持三种写法：
+ *   "39.1342, 117.2010"        ← 字符串（最常用）
+ *   [39.1342, 117.2010]        ← 数组
+ *   { lat: 39.1342, lng: 117.2010 }
+ * 一律「先纬度后经度」。
+ *
+ * 容错：中国经度 73~136、纬度 3~54。所以只要第一个数超过 90，
+ * 基本就是把经度写前面了 —— 自动换回来，并让调用方打个警告。
+ */
+function parseCoord(raw) {
+  let lat;
+  let lng;
+
+  if (Array.isArray(raw)) {
+    if (raw.length < 2) return null;
+    lat = Number(raw[0]);
+    lng = Number(raw[1]);
+  } else if (raw && typeof raw === 'object') {
+    lat = Number(raw.lat !== undefined ? raw.lat : raw.latitude);
+    lng = Number(raw.lng !== undefined ? raw.lng : raw.longitude);
+  } else if (typeof raw === 'string') {
+    const nums = raw
+      .split(/[,，;；\s]+/)
+      .map(Number)
+      .filter(n => Number.isFinite(n));
+    if (nums.length < 2) return null;
+    lat = nums[0];
+    lng = nums[1];
+  } else {
+    return null;
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  let swapped = false;
+  if (Math.abs(lat) > 90 && Math.abs(lng) <= 90) {
+    [lat, lng] = [lng, lat];
+    swapped = true;
+  }
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+
+  return { lat, lng, swapped };
+}
+
+/**
+ * 读坐标补充表（source/_data/photo-gps.yml）
+ *
+ * 返回 Map：照片路径 → { lat, lng }
+ * ⚠️ 这里读到的是 WGS-84，用之前还要过一遍 wgs84ToGcj02。
+ */
+function readManualGps(file) {
+  const out = new Map();
+  if (!fs.existsSync(file)) return out;
+
+  let data;
+  try {
+    data = yaml.load(fs.readFileSync(file, 'utf8')) || {};
+  } catch (err) {
+    throw new Error('photo-gps.yml 解析失败（检查缩进和逗号）：' + err.message);
+  }
+
+  // 容错：坐标行漏了缩进时，YAML 会把它当成顶层键，于是静默失效。
+  // 这种情况 YAML 不报错（缩进少两个空格照样能解析），所以必须专门提醒。
+  const stray = Object.keys(data).filter(
+    k => k !== 'photos' && /\.(jpe?g|png|webp|heic|tif?f|avif)$/i.test(k)
+  );
+  if (stray.length) {
+    console.warn(`\n   ⚠️  photo-gps.yml 里有 ${stray.length} 行漏了缩进（写到 photos: 外面了），不会生效：`);
+    stray.slice(0, 5).forEach(k => console.warn('        ' + k));
+    console.warn('      每行前面要有两个空格，跟 photos: 下面的示例对齐。');
+  }
+
+  const table = data.photos || {};
+  Object.keys(table).forEach(key => {
+    const coord = parseCoord(table[key]);
+    if (!coord) {
+      console.warn(`\n   ⚠️  photo-gps.yml 里这条看不懂，已跳过：${key}: ${JSON.stringify(table[key])}`);
+      return;
+    }
+    if (coord.swapped) {
+      console.warn(`\n   ⚠️  ${key} 的经纬度看着像写反了，已自动换过来：${coord.lat}, ${coord.lng}`);
+    }
+    out.set(String(key).replace(/^\/+/, ''), { lat: coord.lat, lng: coord.lng });
+  });
+
+  return out;
+}
+
 /** 并发受限的 map */
 async function mapLimit(items, limit, fn) {
   const results = new Array(items.length);
@@ -116,4 +209,4 @@ async function mapLimit(items, limit, fn) {
   return results;
 }
 
-module.exports = { wgs84ToGcj02, readGps, mapLimit };
+module.exports = { wgs84ToGcj02, readGps, readManualGps, parseCoord, mapLimit };

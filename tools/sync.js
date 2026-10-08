@@ -7,10 +7,14 @@
  *   node tools/sync.js             列目录 + 取 GPS（完整）
  *   node tools/sync.js --no-gps    只列目录，不取 GPS（快，照片多时用）
  *
- * 它做三件事：
+ * 它做四件事：
  *   1. 连上 R2，列出桶里所有照片（按「国家/城市/」目录结构）
  *   2. 写出 source/_data/photo-index.json  —— 相册生成器读它来自动建树
- *   3. 逐张读 EXIF GPS，写出 source/_data/photo-map.json  —— 地图页读它
+ *   3. 把照片同步进 source/_data/albums.yml 的 photos: 段
+ *      R2 里有、清单里没有的 → 自动补上；清单里有、R2 里没有的 → 自动删掉。
+ *      你写的说明文字（`| 川主寺`）和文件里的注释一律保留。
+ *      所以要「写图注 / 换封面 / 调顺序」，直接改那个文件里的行就行。
+ *   4. 逐张读 EXIF GPS，写出 source/_data/photo-map.json  —— 地图页读它
  *
  * 密钥从 .env.local 读（该文件在 .gitignore 里，不会进 GitHub）。
  */
@@ -20,13 +24,16 @@ const path = require('path');
 const yaml = require('js-yaml');
 
 const { loadEnv, listObjects, ENV_FILE } = require('./lib/r2');
-const { readGps, mapLimit } = require('./lib/gps');
+const { readGps, readManualGps, wgs84ToGcj02, mapLimit } = require('./lib/gps');
+const { syncAlbumPhotos } = require('./lib/albums');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG = path.join(ROOT, '_config.yml');
 const DATA_DIR = path.join(ROOT, 'source', '_data');
 const INDEX_OUT = path.join(DATA_DIR, 'photo-index.json');
 const MAP_OUT = path.join(DATA_DIR, 'photo-map.json');
+const ALBUMS_FILE = path.join(DATA_DIR, 'albums.yml');
+const MANUAL_GPS_FILE = path.join(DATA_DIR, 'photo-gps.yml');
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.tif', '.tiff', '.avif']);
 const CONCURRENCY = 6;
@@ -113,6 +120,30 @@ async function main() {
   console.log(`合计：${formatSize(totalBytes)}`);
   console.log(`已写出：${INDEX_OUT}`);
 
+  // 把扫到的照片同步进 albums.yml 的 photos 段
+  // （保留你写的说明文字和文件注释，只增删照片行；空桶时不动）
+  const album = syncAlbumPhotos(ALBUMS_FILE, photos.map(p => p.p).sort());
+  console.log('\n──────── 相册清单 ────────');
+  if (album.added.length || album.removed.length) {
+    if (album.added.length) {
+      console.log(`新增：${album.added.length} 行`);
+      album.added.slice(0, 8).forEach(p => console.log('  + ' + p));
+      if (album.added.length > 8) console.log(`  ……还有 ${album.added.length - 8} 行`);
+    }
+    if (album.removed.length) {
+      console.log(`删除：${album.removed.length} 行`);
+      album.removed.slice(0, 8).forEach(p => console.log('  - ' + p));
+    }
+    if (album.removedWithCaption.length) {
+      console.log(`\n⚠️  删掉的行里，有 ${album.removedWithCaption.length} 行原本写着说明文字：`);
+      album.removedWithCaption.slice(0, 5).forEach(r => console.log('     ' + r));
+      console.log('   如果那些照片只是还没传上去，重新传一次再跑本命令就会自动回来（说明要重写）。');
+    }
+    console.log(`已更新：${ALBUMS_FILE}`);
+  } else {
+    console.log('清单已经和 R2 一致，无需改动');
+  }
+
   if (!photos.length) {
     console.log('\n桶里还没有照片（或者目录结构不对），先传点照片再跑。');
     return;
@@ -122,6 +153,10 @@ async function main() {
     console.log('\n（加了 --no-gps，跳过 GPS 提取，地图数据保持不变）');
     return;
   }
+
+  // 坐标补充表：照片自己没有 EXIF 坐标时，从这里取
+  const manual = readManualGps(MANUAL_GPS_FILE);
+  if (manual.size) console.log(`\n坐标补充表：读到 ${manual.size} 条手写坐标`);
 
   console.log('\n正在逐张读 EXIF GPS…');
   let done = 0;
@@ -136,6 +171,7 @@ async function main() {
   const withGps = [];
   const noGpsList = [];
   const failed = [];
+  const manualUsed = [];
 
   for (const r of results) {
     if (r.error) {
@@ -143,6 +179,18 @@ async function main() {
       continue;
     }
     if (r.noGps) {
+      // EXIF 里没有坐标 → 查坐标补充表（手写的，WGS-84，要转成 GCJ-02）
+      const m = manual.get(r.photo.p);
+      if (m) {
+        const [gcjLng, gcjLat] = wgs84ToGcj02(m.lng, m.lat);
+        withGps.push({
+          p: r.photo.p,
+          lat: Number(gcjLat.toFixed(5)),
+          lng: Number(gcjLng.toFixed(5))
+        });
+        manualUsed.push(r.photo.p);
+        continue;
+      }
       noGpsList.push(r.photo.p);
       continue;
     }
@@ -162,8 +210,11 @@ async function main() {
   );
 
   console.log('\n──────── 坐标 ────────');
-  console.log(`✅ 带 GPS：${withGps.length} 张`);
-  console.log(`⚠️  没有 GPS：${noGpsList.length} 张`);
+  console.log(`✅ 能上地图：${withGps.length} 张`);
+  if (manualUsed.length) {
+    console.log(`   （其中 ${manualUsed.length} 张来自坐标补充表的手写坐标）`);
+  }
+  console.log(`⚠️  没坐标、上不了地图：${noGpsList.length} 张`);
   if (failed.length) console.log(`❌ 读取失败：${failed.length} 张`);
   console.log(`已写出：${MAP_OUT}`);
 

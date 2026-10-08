@@ -67,9 +67,14 @@ function renderPhoto(hexo, photoPath, caption, source) {
   if (!base) return '<!-- 还没在 _config.yml 里设置 r2_base，无法生成照片地址 -->';
 
   const u = urls(hexo, p);
-  const alt = escapeHtml(caption || '');
 
-  const captionHtml = caption ? `<span>${alt}</span>` : '';
+  // 没写说明时用【文件名】兜底，不要用整条路径 ——
+  // 点开大图的灯箱标题里出现 "china/tianjin/Z30_0534.JPG" 很难看，
+  // 只显示 "Z30_0534.JPG" 就够了。img 的 alt 也一并用它（无障碍友好）。
+  const basename = p.split('/').filter(Boolean).pop() || p;
+  const alt = escapeHtml(caption || basename);
+
+  const captionHtml = caption ? `<span>${escapeHtml(caption)}</span>` : '';
   const originHtml =
     `<a href="${u.original}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">原图</a>`;
   const noteLine = [captionHtml, originHtml].filter(Boolean).join(' · ');
@@ -82,7 +87,7 @@ function renderPhoto(hexo, photoPath, caption, source) {
 
   return [
     '<figure style="margin:0">',
-    `<a href="${u.view}" data-fancybox="album" data-caption="${alt || escapeHtml(p)}">`,
+    `<a href="${u.view}" data-fancybox="album" data-caption="${alt}">`,
     `<img src="${u.thumb}" alt="${alt}" loading="lazy" class="no-lightbox" style="width:100%;border-radius:8px;display:block">`,
     '</a>',
     `<figcaption style="font-size:12px;color:#8a8a8a;text-align:center;margin-top:6px">${noteLine}</figcaption>`,

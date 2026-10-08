@@ -22,7 +22,6 @@ const {
 
 const GALLERY_DIR = 'gallery';
 const CARD_MIN_WIDTH = 190;
-const GRID_MIN_WIDTH = 200;
 
 /* ---------------- 把三处来源合并成一份照片清单 ---------------- */
 
@@ -203,12 +202,37 @@ function renderCards(entries, hexo, isRoot) {
 }
 
 /** 照片墙 */
+/**
+ * 照片墙：多列瀑布流（CSS multi-column）
+ *
+ * 为什么用 columns 而不是 grid：
+ *   grid 是「规整的行」，同一行高度必须一致，矮的照片下方会被撑出空白。
+ *   columns 让每一列独立往下堆，照片按自己的原始比例占高度，中间不留空隙。
+ *
+ * 代价：阅读顺序变成「竖着读」（第 1 列从上到下，再到第 2 列）。
+ *   对相册这种随手翻看的场景影响很小，换来的是零 JS、零依赖、各浏览器表现一致。
+ *
+ * 两个细节必须注意：
+ *   1. break-inside:avoid 一定要加，否则照片会被从中间切到下一列
+ *   2. 间距用 padding-bottom 而不是 margin-bottom —— renderPhoto 生成的
+ *      <figure> 自带内联 style="margin:0"，内联样式优先级高于外部 CSS，
+ *      写 margin 会被它盖掉；padding 没被内联设过，能正常生效
+ */
 function renderGrid(photos, hexo) {
   const figures = sortPhotos(photos)
     .map(photo => renderPhoto(hexo, photo.path, photo.caption, photo.source))
     .join('\n');
 
-  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${GRID_MIN_WIDTH}px,1fr));gap:14px;margin:22px 0;">\n${figures}\n</div>`;
+  const css = [
+    '<style>',
+    '.album-wall{columns:2;column-gap:14px;margin:22px 0}',
+    '.album-wall>figure{break-inside:avoid;padding-bottom:14px}',
+    '@media (min-width:768px){.album-wall{columns:3}}',
+    '@media (min-width:1200px){.album-wall{columns:4}}',
+    '</style>'
+  ].join('');
+
+  return `${css}\n<div class="album-wall">\n${figures}\n</div>`;
 }
 
 /** 面包屑：相册 › 中国 › 四川 */

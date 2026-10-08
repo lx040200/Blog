@@ -17,7 +17,33 @@
 
 photos:
   - china/sichuan-aba/china_sichuan-aba_1772962664015_exif_95295.jpg | 川主寺
-
+  - china/tianjin/Z30_0534.JPG | 天津音乐厅
+  - china/tianjin/Z30_0559.JPG | 天津英租界
+  - china/tianjin/Z30_0572.JPG | 天津一隅
+  - china/tianjin/Z30_0576.JPG | 天津古文化街
+  - china/tianjin/Z30_0579.JPG | 天津邮政博物馆
+  - china/tianjin/Z30_0583.JPG | 天津北安桥
+  - china/sichuan-ganzi/Z30_1878.JPG | 党岭
+  - china/sichuan-ganzi/Z30_1895.JPG | 党岭小猫咪
+  - china/sichuan-ganzi/Z30_1938.JPG | 党岭徒步
+  - china/sichuan-ganzi/Z30_1943.JPG | 葫芦海
+  - china/sichuan-ganzi/Z30_1979.JPG |
+  - china/sichuan-ganzi/Z30_1987.JPG
+  - china/sichuan-ganzi/Z30_2033.JPG
+  - china/sichuan-ganzi/Z30_2035.JPG
+  - china/sichuan-ganzi/Z30_2128.JPG
+  - china/sichuan-ganzi/Z30_2142.JPG
+  - china/sichuan-ganzi/Z30_2152.JPG
+  - china/sichuan-ganzi/Z30_2182.JPG
+  - china/sichuan-ganzi/Z30_2192.JPG
+  - china/sichuan-ganzi/Z30_2193.JPG
+  - china/sichuan-ganzi/Z30_2208.JPG
+  - china/sichuan-ganzi/Z30_2267.JPG
+  - china/sichuan-ganzi/Z30_2298.JPG
+  - china/sichuan-ganzi/Z30_2314.JPG
+  - china/sichuan-ganzi/Z30_2330.JPG
+  - china/sichuan-ganzi/Z30_2348.JPG
+  - china/sichuan-ganzi/Z30_2367.JPG
   # 以后照着上面加行就行，例如：
   # - china/sichuan/chengdu/20260901120000.jpg | 宽窄巷子
   # - china/shanghai/IMG20260405150924.jpg | 外滩 · 入夜
@@ -26,7 +52,9 @@ photos:
 names:
   china: 中国
   sichuan-aba: 四川·阿坝
-
+  tianjin: 天津
+  sichuan-ganzi: 四川·甘孜
+  liaoning-dalian: 辽宁·大连
   # chengdu: 成都
   # shanghai: 上海
   # japan: 日本
