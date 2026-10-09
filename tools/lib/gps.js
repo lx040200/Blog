@@ -78,8 +78,14 @@ async function readGps(url) {
     /* 截断导致解析失败时，下面会整张重试 */
   }
 
-  // 开头一段没读到 GPS，可能是 EXIF 比 256KB 还大，整张再下一次
-  if (!gps || typeof gps.latitude !== 'number') {
+  // 开头 256KB 里没找到 GPS —— 两种可能：这张本来就没 GPS，或者 EXIF 特别大被截断了。
+  //
+  // 判据：如果连拍摄时间都没解析出来，说明 EXIF 确实没读全，整张重下一次；
+  //       拍摄时间读到了就说明 EXIF 是完整的，那就是这张本来没有 GPS，不必重下。
+  //
+  // ⚠️ 这个区分很重要：不加的话，所有「没 GPS」的照片都会整张下载一遍，
+  //    几十张就是几百 MB 的无效流量（相册里没 GPS 的照片往往占大多数）。
+  if ((!gps || typeof gps.latitude !== 'number') && !meta) {
     got = await grab(url, false);
     if (!got.ok) return { error: `HTTP ${got.status}` };
     try {
@@ -90,13 +96,17 @@ async function readGps(url) {
     }
   }
 
-  if (!gps || typeof gps.latitude !== 'number' || typeof gps.longitude !== 'number') {
-    return { noGps: true };
-  }
-
+  // 拍摄时间：不管有没有 GPS 都要留着 —— 相册「按时间分组」要靠它
+  //
+  // ⚠️ EXIF 里的拍摄时间是「当地时间」且不带时区，exifr 按 UTC 语义解析，
+  //    所以这里必须用 toISOString() 原样取回。换成 getHours() 会整体偏掉时区。
   let taken = '';
   if (meta && meta.DateTimeOriginal instanceof Date) {
     taken = meta.DateTimeOriginal.toISOString().slice(0, 19).replace('T', ' ');
+  }
+
+  if (!gps || typeof gps.latitude !== 'number' || typeof gps.longitude !== 'number') {
+    return { noGps: true, taken };
   }
 
   const [gcjLng, gcjLat] = wgs84ToGcj02(gps.longitude, gps.latitude);

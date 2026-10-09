@@ -17,7 +17,8 @@ const {
   readAlbums,
   displayName,
   findByFilename,
-  parsePhotoTags
+  parsePhotoTags,
+  shotOf
 } = require('./lib/albumData');
 
 const GALLERY_DIR = 'gallery';
@@ -82,12 +83,20 @@ function collectPhotos(locals) {
         caption: '',
         order: null,
         source: null,
-        mtime: item.mtime || ''
+        mtime: item.mtime || '',
+        taken: item.taken || ''
       });
     });
   }
 
-  return Array.from(entries.values());
+  // 拍摄时间再统一补一遍 —— albums.yml 补充清单和文章插图这两条来源本身不带 taken
+  const list = Array.from(entries.values());
+  if (idx && Array.isArray(idx.photos)) {
+    const takenByPath = new Map();
+    idx.photos.forEach(p => { if (p.taken) takenByPath.set(p.p, p.taken); });
+    list.forEach(x => { if (!x.taken) x.taken = takenByPath.get(x.path) || ''; });
+  }
+  return list;
 }
 
 /* ---------------- 建树 ---------------- */
@@ -202,37 +211,116 @@ function renderCards(entries, hexo, isRoot) {
 }
 
 /** 照片墙 */
+/** 按拍摄月份把照片分组。没有拍摄时间的归到最后一组（key 为空串） */
+function groupByMonth(photos) {
+  const map = new Map();
+  photos.forEach(p => {
+    const key = p.taken ? String(p.taken).slice(0, 7) : '';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(p);
+  });
+  return Array.from(map.entries()).sort((a, b) => {
+    if (!a[0]) return 1;               // 「时间未知」永远垫底
+    if (!b[0]) return -1;
+    return b[0].localeCompare(a[0]);   // 新的月份在前
+  });
+}
+
+/** '2026-07' → '2026年7月' */
+function monthLabel(key) {
+  if (!key) return '时间未知';
+  const [y, m] = String(key).split('-');
+  return `${y}年${Number(m)}月`;
+}
+
 /**
- * 照片墙：多列瀑布流（CSS multi-column）
+ * 照片墙：按「拍摄月份」切成若干段，每段一个标题 + 一片瀑布流
  *
- * 为什么用 columns 而不是 grid：
+ * 为什么要分段：同一个地方会去很多次。全混在一起看不出哪张是哪趟的，
+ * 分段之后「2025年8月」和「2027年10月」自动分开。
+ * 判据是**自然月** —— 同一个月内拍的算同一趟。
+ *
+ * 排版用 CSS 多列（columns）而不是 grid：
  *   grid 是「规整的行」，同一行高度必须一致，矮的照片下方会被撑出空白。
  *   columns 让每一列独立往下堆，照片按自己的原始比例占高度，中间不留空隙。
- *
- * 代价：阅读顺序变成「竖着读」（第 1 列从上到下，再到第 2 列）。
- *   对相册这种随手翻看的场景影响很小，换来的是零 JS、零依赖、各浏览器表现一致。
+ *   代价是阅读顺序变成「竖着读」（第 1 列从上到下，再到第 2 列）。
  *
  * 两个细节必须注意：
  *   1. break-inside:avoid 一定要加，否则照片会被从中间切到下一列
  *   2. 间距用 padding-bottom 而不是 margin-bottom —— renderPhoto 生成的
  *      <figure> 自带内联 style="margin:0"，内联样式优先级高于外部 CSS，
  *      写 margin 会被它盖掉；padding 没被内联设过，能正常生效
+ *
+ * 联动：某一段要是能对上轨迹页里的月份，标题旁就挂一句「这趟写了 N 篇 →」，
+ *       点了跳到轨迹页对应的锚点。对不上就只有纯文字标题，不给点了没用的链接。
  */
-function renderGrid(photos, hexo) {
-  const figures = sortPhotos(photos)
-    .map(photo => renderPhoto(hexo, photo.path, photo.caption, photo.source))
-    .join('\n');
+function renderGrid(photos, hexo, locals) {
+  const groups = groupByMonth(sortPhotos(photos));
+
+  // 每篇文章的拍摄月份 → 这个月有几篇（用于「这趟写了 N 篇」）
+  const posts = locals && locals.posts && locals.posts.length ? locals.posts.toArray() : [];
+  const postsByMonth = new Map();
+  posts.forEach(post => {
+    const shot = shotOf(post);
+    if (!shot) return;
+    const month = shot.slice(0, 7);
+    postsByMonth.set(month, (postsByMonth.get(month) || 0) + 1);
+  });
 
   const css = [
     '<style>',
-    '.album-wall{columns:2;column-gap:14px;margin:22px 0}',
+    '.album-wall{columns:2;column-gap:14px;margin:14px 0 28px}',
     '.album-wall>figure{break-inside:avoid;padding-bottom:14px}',
+    '.album-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:30px 0 0;padding-bottom:8px;border-bottom:1px solid #ececea;scroll-margin-top:80px}',
+    '.album-head b{font-weight:500;font-size:17px;color:#1f2328}',
+    '.album-head span{font-size:13px;color:#8a8a8a}',
+    '.album-head a{font-size:13px;color:#185fa5;text-decoration:none;margin-left:auto}',
+    // 右侧竖时间轴 —— 只在有 2 个以上时间段时出现
+    '.album-timeline{position:fixed;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;z-index:20}',
+    '.album-timeline::before{content:"";position:absolute;right:4px;top:12px;bottom:12px;width:1px;background:#e2e4e8}',
+    '.album-timeline a{display:flex;align-items:center;gap:9px;text-decoration:none;padding:9px 0}',
+    '.album-timeline .dot{order:2;width:9px;height:9px;border-radius:50%;background:#d0d3d9;flex:none;transition:background .2s}',
+    '.album-timeline .label{order:1;font-size:12px;color:#8a8a8a;white-space:nowrap;transition:color .2s}',
+    '.album-timeline a:hover .dot{background:#185fa5}',
+    '.album-timeline a:hover .label{color:#185fa5}',
     '@media (min-width:768px){.album-wall{columns:3}}',
     '@media (min-width:1200px){.album-wall{columns:4}}',
+    // 窄屏没地方放，直接藏起来（手机上靠标题就够了）
+    '@media (max-width:1200px){.album-timeline{display:none}}',
     '</style>'
   ].join('');
 
-  return `${css}\n<div class="album-wall">\n${figures}\n</div>`;
+  const blocks = groups.map(([month, list]) => {
+    const wall =
+      '<div class="album-wall">\n' +
+      // 相册里图片下面：保留说明文字 + 「原图」链接，
+      // 但不要「出自《…》→」（那是指向文章的出链，相册里不显示）
+      list.map(p => renderPhoto(hexo, p.path, p.caption, p.source, { showSource: false })).join('\n') +
+      '\n</div>';
+
+    // 每组都写标题 —— 一次拍摄（只有一组）时也写，一眼能看出是什么时候拍的
+    const count = `<span>${list.length} 张</span>`;
+    const n = month ? postsByMonth.get(month) || 0 : 0;
+    const link = n
+      ? `<a href="/timeline/#y${month}">这趟写了 ${n} 篇 →</a>`
+      : '';
+    const anchor = month ? ` id="m${month}"` : '';
+
+    return `<p class="album-head"${anchor}><b>${monthLabel(month)}</b>${count}${link}</p>\n${wall}`;
+  });
+
+  // 右侧竖时间轴：把各个时间段串起来，点一下跳到那段。
+  // 只有一段时不出现 —— 一个点连不成线，也没必要占地方。
+  const timeline = groups.length > 1
+    ? '<nav class="album-timeline">\n' +
+      groups
+        .filter(([month]) => month)
+        .map(([month]) => `<a href="#m${month}"><span class="label">${monthLabel(month)}</span><span class="dot"></span></a>`)
+        .join('\n') +
+      '\n</nav>'
+    : '';
+
+  return css + '\n' + timeline + '\n' + blocks.join('\n');
 }
 
 /** 面包屑：相册 › 中国 › 四川 */
@@ -286,7 +374,7 @@ hexo.extend.generator.register('album', function (locals) {
 
     // 相册首页即使一张照片都没有，也要显示「地图」那张卡片，不然整页是空的
     if (entries.length || isRoot) blocks.push(renderCards(entries, hexo, isRoot));
-    if (node.photos.length) blocks.push(renderGrid(node.photos, hexo));
+    if (node.photos.length) blocks.push(renderGrid(node.photos, hexo, locals));
 
     pages.push({
       path: node.key ? `${GALLERY_DIR}/${node.key}/index.html` : `${GALLERY_DIR}/index.html`,

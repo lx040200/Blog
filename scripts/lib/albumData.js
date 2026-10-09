@@ -136,6 +136,49 @@ function dirOf(photoPath) {
   return segs.join('/');
 }
 
+/**
+ * 读一篇文章的「拍摄日期」—— front-matter 里的 shot，返回 'YYYY-MM-DD' 或 'YYYY-MM'
+ * 没写就返回 ''（表示这篇不算拍摄类文章，不进取景轨迹）
+ *
+ * 轨迹页和相册的时间关联都用这一个函数，保证两边算出来的月份永远一致。
+ *
+ * ⚠️ 时区坑（这个坑踩过两次，别再踩）：
+ *   1. js-yaml 把 `shot: 2024-08-01` 解析成的是**本地时间**的午夜，
+ *      所以必须用 getFullYear / getMonth / getDate 取值，用 getUTC* 在东八区会退回一天。
+ *   2. Hexo 缓存（db.json）会把 Date 序列化成 ISO 串（本地午夜 → 前一天 16:00Z）。
+ *      字符串分支若直接取前 10 位，同样退一天 —— 所以带时间的写法一律交给 Date，
+ *      再统一走「本地取值」。
+ */
+function shotOf(post) {
+  const raw = post && post.shot;
+  if (raw === undefined || raw === null || raw === '') return '';
+
+  const fromDate = d => {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  if (raw instanceof Date) return fromDate(raw);
+
+  const s = String(raw).trim();
+
+  // 纯日期写法（2024-08-01 / 2024.8.1 / 2024-08）直接取，绕开所有时区陷阱
+  const plain = s.match(/^(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?$/);
+  if (plain) {
+    const month = String(plain[2]).padStart(2, '0');
+    const day = plain[3] ? String(plain[3]).padStart(2, '0') : '';
+    return day ? `${plain[1]}-${month}-${day}` : `${plain[1]}-${month}`;
+  }
+
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) return fromDate(parsed);
+
+  return '';
+}
+
 module.exports = {
   ROOT,
   DATA_DIR,
@@ -148,5 +191,6 @@ module.exports = {
   readAlbums,
   displayName,
   parsePhotoTags,
-  dirOf
+  dirOf,
+  shotOf
 };

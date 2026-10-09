@@ -26,6 +26,7 @@ const yaml = require('js-yaml');
 const { loadEnv, listObjects, ENV_FILE } = require('./lib/r2');
 const { readGps, readManualGps, wgs84ToGcj02, mapLimit } = require('./lib/gps');
 const { syncAlbumPhotos } = require('./lib/albums');
+const { generateDrafts, appendNewPhotos } = require('./lib/draft');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG = path.join(ROOT, '_config.yml');
@@ -52,6 +53,13 @@ function formatSize(bytes) {
   if (bytes > 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
   if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
   return Math.round(bytes / 1024) + ' KB';
+}
+
+/** 照片显示模式，跟 _config.yml 的 image_mode 一致（草稿封面要用） */
+function readImageMode() {
+  const cfg = yaml.load(fs.readFileSync(CONFIG, 'utf8')) || {};
+  const raw = String(cfg.image_mode || '').trim().toLowerCase();
+  return raw === 'direct' ? 'direct' : 'transformations';
 }
 
 async function main() {
@@ -107,12 +115,27 @@ async function main() {
   const dirs = new Set(photos.map(p => p.dir).filter(Boolean));
   const totalBytes = photos.reduce((sum, p) => sum + p.size, 0);
 
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(
+  // 上一次索引里的「拍摄时间」先继承过来 —— 加了 --no-gps 会跳过 EXIF 读取，
+  // 没有这一步就把已经读到的拍摄时间清空了
+  const takenFromPrev = new Map();
+  if (fs.existsSync(INDEX_OUT)) {
+    try {
+      const old = JSON.parse(fs.readFileSync(INDEX_OUT, 'utf8'));
+      (old.photos || []).forEach(p => { if (p.taken) takenFromPrev.set(p.p, p.taken); });
+    } catch (err) { /* 旧文件坏了就当没有 */ }
+  }
+  photos.forEach(p => {
+    if (!p.taken && takenFromPrev.has(p.p)) p.taken = takenFromPrev.get(p.p);
+  });
+
+  const writeIndex = () => fs.writeFileSync(
     INDEX_OUT,
     JSON.stringify({ generated: new Date().toISOString(), base, photos }, null, 0),
     'utf8'
   );
+
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  writeIndex();
 
   console.log('\n──────── 目录 ────────');
   console.log(`照片：${photos.length} 张`);
@@ -208,6 +231,50 @@ async function main() {
     JSON.stringify({ generated: new Date().toISOString(), photos: withGps }),
     'utf8'
   );
+
+  // 把拍摄时间回填进相册索引。
+  // 地图数据（MAP_OUT）里的 t 只有「带 GPS」的照片才有，相册要的是每一张。
+  const byPath = new Map(photos.map(p => [p.p, p]));
+  let takenFilled = 0;
+  for (const r of results) {
+    if (!r.taken) continue;
+    const photo = byPath.get(r.photo.p);
+    if (photo && !photo.taken) { photo.taken = r.taken; takenFilled += 1; }
+  }
+  if (takenFilled) {
+    writeIndex();
+    console.log(`\n已把 ${takenFilled} 张的拍摄时间写进相册数据（相册按时间分组要用）`);
+  }
+
+  // ──────── 自动生成旅行草稿 ────────
+  // 某一组（目录 + 月份）的照片，一张都没被文章引用过 → 这趟还没写 → 生成草稿。
+  // 草稿正文本身就带 {% photo %}，所以生成过一次之后就不会再重复生成。
+  const drafts = generateDrafts({
+    postsDir: path.join(ROOT, 'source', '_posts'),
+    albumsFile: ALBUMS_FILE,
+    base,
+    imageMode: readImageMode(),
+    photos,
+    log: msg => console.log(msg)
+  });
+
+  console.log('\n──────── 旅行草稿 ────────');
+  if (drafts.created.length) {
+    console.log(`新建 ${drafts.created.length} 篇（正文只有照片，补上文字再提交就行）`);
+  } else {
+    console.log('没有需要新建的草稿');
+  }
+
+  // 往已有草稿里补「后来加进同一时段的照片」
+  // 只往文件末尾追加，绝不改动你已经写下的文字
+  const filled = appendNewPhotos({
+    postsDir: path.join(ROOT, 'source', '_posts'),
+    photos,
+    log: msg => console.log(msg)
+  });
+  if (filled.appended.length) {
+    console.log(`已补进 ${filled.appended.length} 篇草稿`);
+  }
 
   console.log('\n──────── 坐标 ────────');
   console.log(`✅ 能上地图：${withGps.length} 张`);

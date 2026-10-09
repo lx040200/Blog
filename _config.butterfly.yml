@@ -174,6 +174,7 @@ subtitle:
   # If you close the typewriter effect, the subtitle will only show the first line of sub
   sub:
     - 無限進步·努力成長
+    - 探索·理解世界
     - 梦想是旅居全世界
 
 # Article layout on the homepage
@@ -268,13 +269,18 @@ noticeOutdate:
 footer:
   nav:
   owner:
-    enable: true
+    enable: false
     since: 2025
   # Copyright of theme and framework
   copyright:
-    enable: true
+    enable: false
     version: true
-  custom_text:
+  # 左下角品牌区（仿 Redefine 样式）—— HTML 写在这里，样式在 inject.head 的 CSS 里
+  custom_text: |
+    <div class="footer-brand">
+      <p class="fb-line"><span class="fb-cap">POWERED BY</span><svg class="fb-logo" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="#1B9CE3"/><path d="M8 6v12M16 6v12M8 12h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg><a href="https://hexo.io" target="_blank" rel="noopener">Hexo</a></p>
+      <p class="fb-line"><span class="fb-cap">THEME</span><a href="https://github.com/jerryc127/hexo-theme-butterfly" target="_blank" rel="noopener">Butterfly</a><span class="fb-ver">v5.7.0</span><span class="fb-copy">© 2025 - 2026 LX</span></p>
+    </div>
 
 # --------------------------------------
 # Aside Settings
@@ -284,7 +290,8 @@ aside:
   enable: true
   hide: false
   # Show the button to hide the aside in bottom right button
-  button: true
+  # 关掉：右下角那个「折叠/展开侧栏」的悬浮按钮
+  button: false
   mobile: true
   # Position: left / right
   position: right
@@ -295,7 +302,9 @@ aside:
     tag: false
     category: false
   card_author:
-    enable: true
+    # 关掉：侧栏最上面那张「头像 + 名字 + 关注按钮」卡片
+    # 首页本来就没有侧栏了（见 scripts/home-aside.js），这里是给其他页面去掉
+    enable: false
     description:
     button:
       enable: true
@@ -1070,6 +1079,8 @@ css_prefix: true
 inject:
   head:
     # - <link rel="stylesheet" href="/xxx.css">
+    # 页脚左下角品牌区（配合 footer.custom_text 使用）
+    - "<style>#footer{background:var(--card-bg,#fff) !important}#footer, #footer a{color:var(--font-color,#4b5563) !important}#footer .footer_custom_text{text-align:left}#footer .footer-brand{display:inline-block;text-align:left}#footer .fb-line{display:flex;align-items:center;gap:7px;margin:3px 0;font-size:13.5px}#footer .fb-cap{font-size:11px;letter-spacing:.6px;color:#9aa3ad;font-weight:600}#footer .fb-line a{color:#4b5563}#footer .fb-line a:hover{color:#1B9CE3}#footer .fb-ver{font-size:12px;color:#9aa3ad}#footer .fb-copy{font-size:12px;color:#b6bcc4;margin-left:6px}#footer .fb-logo{flex:none}</style>"
   bottom:
     # - <script src="xxxx"></script>
 

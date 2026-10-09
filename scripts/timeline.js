@@ -13,44 +13,9 @@
  */
 
 const { escapeHtml } = require('./lib/photo');
-
-/** 把 front-matter 里的 shot 读成一个「YYYY-MM-DD」字符串 */
-function shotOf(post) {
-  const raw = post.shot;
-  if (raw === undefined || raw === null || raw === '') return '';
-
-  // 取 Date 的「本地」年月日
-  //
-  // ⚠️ 必须用本地取值，不能用 getUTC*。
-  //    js-yaml 把 `shot: 2024-08-01` 解析成的是**本地时间**的午夜，
-  //    用 getUTC* 在东八区会退回一天（显示成 07-31）。
-  const fromDate = d => {
-    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  if (raw instanceof Date) return fromDate(raw);
-
-  const s = String(raw).trim();
-
-  // 纯日期写法（2024-08-01 / 2024.8.1 / 2024-08）直接取，绕开所有时区陷阱
-  const plain = s.match(/^(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?$/);
-  if (plain) {
-    const month = String(plain[2]).padStart(2, '0');
-    const day = plain[3] ? String(plain[3]).padStart(2, '0') : '';
-    return day ? `${plain[1]}-${month}-${day}` : `${plain[1]}-${month}`;
-  }
-
-  // 带时间的写法 —— 也包括 Hexo 缓存(db.json)序列化出来的 ISO 串。
-  // 交给 Date 解析后统一走「本地取值」，才能和上面保持一致。
-  const parsed = new Date(s);
-  if (!isNaN(parsed.getTime())) return fromDate(parsed);
-
-  return '';
-}
+// shot 的解析放在 lib 里 —— 相册「按拍摄月份分组」要用同一套逻辑，
+// 两份实现迟早会漂移（比如时区处理改了一边忘了另一边）
+const { shotOf } = require('./lib/albumData');
 
 /** 取文章封面（没有就算了） */
 function coverOf(post) {
@@ -91,6 +56,9 @@ hexo.extend.generator.register('timeline', function (locals) {
 
     body = Array.from(groups.entries())
       .map(([year, items]) => {
+        // 每个月只在第一条上加锚点 id —— 相册页那句「这趟写了 N 篇」要跳到这里
+        const seenMonths = new Set();
+
         const rows = items
           .map(({ post, shot }) => {
             const day = shot.length >= 10 ? shot.slice(5) : shot.slice(5) + '-';
@@ -99,8 +67,12 @@ hexo.extend.generator.register('timeline', function (locals) {
               ? `<img class="no-lightbox" src="${escapeHtml(cover)}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:8px;display:block;flex:none;background:#efefe9">`
               : '<div style="width:56px;height:56px;border-radius:8px;background:#efefe9;flex:none"></div>';
 
+            const month = shot.slice(0, 7);
+            const anchor = seenMonths.has(month) ? '' : ` id="y${month}"`;
+            seenMonths.add(month);
+
             return [
-              `<a href="/${post.path}" style="display:flex;gap:14px;align-items:center;text-decoration:none;padding:12px 14px;border-radius:10px;background:#fafaf8">`,
+              `<a${anchor} href="/${post.path}" style="display:flex;gap:14px;align-items:center;text-decoration:none;padding:12px 14px;border-radius:10px;background:#fafaf8">`,
               thumb,
               '<span style="min-width:0">',
               `<span style="display:block;font-size:12px;color:#8a8a8a;letter-spacing:.5px">${day}</span>`,

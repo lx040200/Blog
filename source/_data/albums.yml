@@ -44,6 +44,34 @@ photos:
   - china/sichuan-ganzi/Z30_2330.JPG
   - china/sichuan-ganzi/Z30_2348.JPG
   - china/sichuan-ganzi/Z30_2367.JPG
+  - china/fujian-quanzhou/IMG20260223181059.jpg
+  - china/fujian-quanzhou/IMG_20260225_232155.jpg
+  - china/fujian-quanzhou/IMG_20261009_193616.jpg
+  - china/fujian-quanzhou/IMG_20261009_193721.jpg
+  - china/fujian-quanzhou/IMG_20261009_194938.jpg
+  - china/henan-jiaozuo/IMG_20261009_203350.jpg
+  - china/henan-jiaozuo/IMG_20261009_203511.jpg
+  - china/henan-jiaozuo/IMG_20261009_203952.jpg
+  - china/sichuan-aba/IMG_20261009_204757.jpg
+  - china/sichuan-ganzi/IMG_20261009_205053.jpg
+  - china/sichuan-ganzi/IMG_20261009_205349.jpg
+  - china/sichuan-ganzi/IMG_20261009_205512.jpg
+  - china/sichuan-ganzi/IMG_20261009_205839.jpg
+  - china/sichuan-liangshan/IMG_20261009_200406.jpg
+  - china/sichuan-liangshan/IMG_20261009_200456.jpg
+  - china/sichuan-liangshan/IMG_20261009_200554.jpg
+  - china/sichuan-liangshan/IMG_20261009_200655.jpg
+  - china/sichuan-liangshan/IMG_20261009_200750.jpg
+  - china/sichuan-liangshan/IMG_20261009_201000.jpg
+  - china/sichuan-liangshan/IMG_20261009_201135.jpg
+  - china/sichuan-liangshan/IMG_20261009_201156.jpg
+  - china/sichuan-liangshan/IMG_20261009_201257.jpg
+  - china/sichuan-liangshan/IMG_20261009_201655.jpg
+  - china/sichuan-liangshan/IMG_20261009_201841.jpg
+  - china/sichuan-liangshan/IMG_20261009_202251.jpg
+  - china/sichuan-liangshan/IMG_20261009_202357.jpg
+  - china/sichuan-liangshan/IMG_20261009_202512.jpg
+  - china/sichuan-liangshan/IMG_20261009_202545.jpg
   # 以后照着上面加行就行，例如：
   # - china/sichuan/chengdu/20260901120000.jpg | 宽窄巷子
   # - china/shanghai/IMG20260405150924.jpg | 外滩 · 入夜
@@ -55,6 +83,9 @@ names:
   tianjin: 天津
   sichuan-ganzi: 四川·甘孜
   liaoning-dalian: 辽宁·大连
+  fujian-quanzhou: 福建·泉州
+  sichuan-liangshan: 四川·凉山
+  henan-jiaozuo: 河南·焦作
   # chengdu: 成都
   # shanghai: 上海
   # japan: 日本

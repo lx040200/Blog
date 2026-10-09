@@ -58,8 +58,11 @@ function urls(hexo, photoPath) {
  * @param {string} photoPath  R2 里的对象路径
  * @param {string} caption    说明文字；为空则图注里不显示说明
  * @param {object} [source]   可选出处 { title, url }，会显示「出自《标题》→」
+ * @param {object} [opts]     { showOriginal: false } 可以不挂下面的「原图」链接
+ *                            { showSource: false }   可以不挂「出自《…》→」
+ *                            （相册页两个都不要 —— 图片下面保持干净，点图片就能看大图）
  */
-function renderPhoto(hexo, photoPath, caption, source) {
+function renderPhoto(hexo, photoPath, caption, source, opts) {
   const p = normalizePath(photoPath);
   if (!p) return '';
 
@@ -74,13 +77,17 @@ function renderPhoto(hexo, photoPath, caption, source) {
   const basename = p.split('/').filter(Boolean).pop() || p;
   const alt = escapeHtml(caption || basename);
 
+  const showOriginal = !(opts && opts.showOriginal === false);
+  const showSource = !(opts && opts.showSource === false);
+
   const captionHtml = caption ? `<span>${escapeHtml(caption)}</span>` : '';
-  const originHtml =
-    `<a href="${u.original}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">原图</a>`;
+  const originHtml = showOriginal
+    ? `<a href="${u.original}" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">原图</a>`
+    : '';
   const noteLine = [captionHtml, originHtml].filter(Boolean).join(' · ');
 
   const sourceHtml =
-    source && source.url && source.title
+    showSource && source && source.url && source.title
       ? `\n<div style="font-size:12px;text-align:center;margin-top:4px">` +
         `<a href="${source.url}" style="color:#185fa5;text-decoration:none">出自《${escapeHtml(source.title)}》 →</a></div>`
       : '';
@@ -90,7 +97,9 @@ function renderPhoto(hexo, photoPath, caption, source) {
     `<a href="${u.view}" data-fancybox="album" data-caption="${alt}">`,
     `<img src="${u.thumb}" alt="${alt}" loading="lazy" class="no-lightbox" style="width:100%;border-radius:8px;display:block">`,
     '</a>',
-    `<figcaption style="font-size:12px;color:#8a8a8a;text-align:center;margin-top:6px">${noteLine}</figcaption>`,
+    noteLine
+      ? `<figcaption style="font-size:12px;color:#8a8a8a;text-align:center;margin-top:6px">${noteLine}</figcaption>`
+      : '',
     sourceHtml,
     '</figure>'
   ]
