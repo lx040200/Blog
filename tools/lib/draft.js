@@ -231,4 +231,66 @@ function appendNewPhotos(opts) {
   return { appended };
 }
 
-module.exports = { generateDrafts, appendNewPhotos, collectReferenced, readNames };
+/**
+ * 校正已有草稿的标题
+ *
+ * 场景：某篇草稿生成时，albums.yml 的 names 里**还没有**这个新地点，
+ *       标题就退成了英文目录名（例如「2026年2月 · sichuan-liangshan」）。
+ *       之后你补上 names、再跑同步，草稿因为「只新建、绝不覆盖」也不会自己更新。
+ *
+ * 做法：只处理 trip-*.md，从 front-matter 的 `trip: "<目录>|<月份>"` 算出正确标题。
+ *       ⚠️ **只替换「标题末尾正好是英文目录名」的那种** —— 你自己改过的标题一律不动。
+ *
+ * @returns {Array<{file:string, from:string, to:string}>}
+ */
+function fixDraftTitles(opts) {
+  const { postsDir, albumsFile } = opts;
+  const log = opts.log || (() => {});
+  const names = readNames(albumsFile);
+  const fixed = [];
+
+  if (!fs.existsSync(postsDir)) return fixed;
+
+  for (const f of fs.readdirSync(postsDir)) {
+    if (!/^trip-.*\.md$/i.test(f)) continue;
+
+    const file = path.join(postsDir, f);
+    let text;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch (err) {
+      continue;
+    }
+
+    // ① 这篇属于哪一组：trip: "<目录>|<月份>"
+    const tripLine = text.match(/^trip:[^\n]*$/m);
+    if (!tripLine) continue;
+    const tripVal = tripLine[0].replace(/^trip:\s*/, '').replace(/^"|"$/g, '').trim();
+    if (!tripVal.includes('|')) continue;
+
+    const [dir, month] = tripVal.split('|').map(s => s.trim());
+    if (!dir || !month) continue;
+
+    const leaf = dir.split('/').pop();
+    const cn = names[leaf];
+    if (!cn) continue;                       // names 里还没登记 → 没法校正，跳过
+
+    const correct = `${monthLabel(month)} · ${cn}`;
+
+    // ② 只当标题末尾正好是英文目录名时才替换（保护你手改过的标题）
+    const titleLine = text.match(/^title:[^\n]*$/m);
+    if (!titleLine) continue;
+    const oldTitle = titleLine[0].replace(/^title:\s*/, '').trim();
+
+    if (oldTitle === correct) continue;                    // 已经对了
+    if (!oldTitle.endsWith(`· ${leaf}`)) continue;         // 你改过 → 不动
+
+    fs.writeFileSync(file, text.replace(titleLine[0], `title: ${correct}`), 'utf8');
+    fixed.push({ file: f, from: oldTitle, to: correct });
+    log(`  ✎ ${f}：${oldTitle} → ${correct}`);
+  }
+
+  return fixed;
+}
+
+module.exports = { generateDrafts, appendNewPhotos, fixDraftTitles, collectReferenced, readNames };

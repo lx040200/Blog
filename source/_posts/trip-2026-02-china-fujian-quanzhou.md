@@ -1,5 +1,5 @@
 ---
-title: 2026年2月 · fujian-quanzhou
+title: 2026年2月 · 福建·泉州
 date: 2026-10-09 21:17:22
 shot: 2026-02-22
 trip: "china/fujian-quanzhou|2026-02"

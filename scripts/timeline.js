@@ -63,9 +63,14 @@ hexo.extend.generator.register('timeline', function (locals) {
           .map(({ post, shot }) => {
             const day = shot.length >= 10 ? shot.slice(5) : shot.slice(5) + '-';
             const cover = coverOf(post);
+            // ⚠️ 缩略图必须显式写 margin:0
+            // 主题给文章里的 <img> 设了 `margin: 0 auto 20px`（本意是让单张插图居中）。
+            // 但在这种「图 + 文字」的 flex 并排布局里，auto 外边距会把图片推到行中间、
+            // 文字被挤到最右边，整行看着就是散的。内联 margin:0 优先级高于主题 CSS，能把它按回左边。
+            // （相册的 renderPhoto 里踩过同一个坑，用的是同一招）
             const thumb = cover
-              ? `<img class="no-lightbox" src="${escapeHtml(cover)}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:8px;display:block;flex:none;background:#efefe9">`
-              : '<div style="width:56px;height:56px;border-radius:8px;background:#efefe9;flex:none"></div>';
+              ? `<img class="no-lightbox" src="${escapeHtml(cover)}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:8px;display:block;flex:none;margin:0;background:#efefe9">`
+              : '<div style="width:56px;height:56px;border-radius:8px;background:#efefe9;flex:none;margin:0"></div>';
 
             const month = shot.slice(0, 7);
             const anchor = seenMonths.has(month) ? '' : ` id="y${month}"`;

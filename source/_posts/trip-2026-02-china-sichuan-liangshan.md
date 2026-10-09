@@ -1,5 +1,5 @@
 ---
-title: 2026年2月 · sichuan-liangshan
+title: 2026年2月 · 四川·凉山
 date: 2026-10-09 21:17:22
 shot: 2026-02-05
 trip: "china/sichuan-liangshan|2026-02"

@@ -1,5 +1,5 @@
 ---
-title: 2026年7月 · henan-jiaozuo
+title: 2026年7月 · 河南·焦作
 date: 2026-10-09 21:17:22
 shot: 2026-07-03
 trip: "china/henan-jiaozuo|2026-07"

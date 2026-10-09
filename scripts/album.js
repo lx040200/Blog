@@ -257,14 +257,35 @@ function monthLabel(key) {
 function renderGrid(photos, hexo, locals) {
   const groups = groupByMonth(sortPhotos(photos));
 
-  // 每篇文章的拍摄月份 → 这个月有几篇（用于「这趟写了 N 篇」）
+  // 当前相册的目录（照片路径去掉文件名）
+  // 「这趟写了 N 篇」必须按「地点 + 月份」匹配 —— 只按月份会把同一个月的**别的**地点也算进来
+  // （踩过：凉山 7 月只有 1 篇，却显示成当月总数 4 篇）
+  const placeDir = photos.length ? String(photos[0].path).replace(/\/[^/]*$/, '') : '';
+
+  // 「目录|月份」→ 有几篇
+  // 一篇文章算哪个地点，用**正文里引用的照片路径**反推 ——
+  // 这样老文章（没有 trip: 字段）也一样能对上。
   const posts = locals && locals.posts && locals.posts.length ? locals.posts.toArray() : [];
-  const postsByMonth = new Map();
+  const postsByPlaceMonth = new Map();
   posts.forEach(post => {
     const shot = shotOf(post);
     if (!shot) return;
     const month = shot.slice(0, 7);
-    postsByMonth.set(month, (postsByMonth.get(month) || 0) + 1);
+
+    const dirs = new Set();
+    parsePhotoTags(post.raw).forEach(tag => {
+      let p = tag.path;
+      if (p && !p.includes('/')) {
+        const found = findByFilename(p);
+        if (found) p = found;
+      }
+      if (p && p.includes('/')) dirs.add(p.slice(0, p.lastIndexOf('/')));
+    });
+
+    dirs.forEach(d => {
+      const key = `${d}|${month}`;
+      postsByPlaceMonth.set(key, (postsByPlaceMonth.get(key) || 0) + 1);
+    });
   });
 
   const css = [
@@ -300,7 +321,7 @@ function renderGrid(photos, hexo, locals) {
 
     // 每组都写标题 —— 一次拍摄（只有一组）时也写，一眼能看出是什么时候拍的
     const count = `<span>${list.length} 张</span>`;
-    const n = month ? postsByMonth.get(month) || 0 : 0;
+    const n = month && placeDir ? postsByPlaceMonth.get(`${placeDir}|${month}`) || 0 : 0;
     const link = n
       ? `<a href="/timeline/#y${month}">这趟写了 ${n} 篇 →</a>`
       : '';

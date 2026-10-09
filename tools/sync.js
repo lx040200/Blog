@@ -26,7 +26,7 @@ const yaml = require('js-yaml');
 const { loadEnv, listObjects, ENV_FILE } = require('./lib/r2');
 const { readGps, readManualGps, wgs84ToGcj02, mapLimit } = require('./lib/gps');
 const { syncAlbumPhotos } = require('./lib/albums');
-const { generateDrafts, appendNewPhotos } = require('./lib/draft');
+const { generateDrafts, appendNewPhotos, fixDraftTitles } = require('./lib/draft');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG = path.join(ROOT, '_config.yml');
@@ -274,6 +274,18 @@ async function main() {
   });
   if (filled.appended.length) {
     console.log(`已补进 ${filled.appended.length} 篇草稿`);
+  }
+
+  // 校正已有草稿的标题
+  // 草稿生成那一刻如果 names 里还没登记中文名，标题会退成英文目录名；
+  // 补上 names 之后再跑同步，这里会把标题改回中文（⚠️ 你自己改过的标题不会被动）。
+  const renamed = fixDraftTitles({
+    postsDir: path.join(ROOT, 'source', '_posts'),
+    albumsFile: ALBUMS_FILE,
+    log: msg => console.log(msg)
+  });
+  if (renamed.length) {
+    console.log(`已校正 ${renamed.length} 篇草稿的标题`);
   }
 
   console.log('\n──────── 坐标 ────────');
