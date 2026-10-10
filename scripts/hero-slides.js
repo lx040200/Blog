@@ -7,19 +7,47 @@
  * 做法：用 after_render:html 过滤器，**只在首页**注入一小段 CSS + JS。
  * 不修改主题文件，主题升级也不会被覆盖。
  *
- * 用法：把图片丢进 source/img/banner/ —— **丢几张就轮播几张**，不用写任何配置。
- *   图片按文件名排序，所以建议命名成 01.jpg / 02.jpg / 03.jpg
- *   不足 2 张时不启用轮播，首页照常显示 index_img 那张（不会白屏）
+ * 图片来源（按优先级）：
+ *   1. R2 的 banner/ 目录 —— 跑一次 `node tools/sync.js` 会把它扫出来、
+ *      写成 source/_data/hero-slides.json，这里读清单拼地址。
+ *      图片走 Cloudflare 的图片变换压到 1920 宽，比原图小得多。
+ *   2. 退回本地 source/img/banner/（清单不存在或为空时用）
+ *   两种都没有 → 不轮播，首页照常显示 index_img 那张（不会白屏）
+ *   不足 2 张也不启用 —— 一张图没法「轮播」
+ *
+ * 为什么清单要在本地生成：Cloudflare 云端构建时**拿不到 R2 凭证**，扫不了桶。
+ *   所以走跟照片一样的套路：本地同步一次 → 结果固化进 JSON → 构建时只读文件。
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const BANNER_DIR = path.join(__dirname, '..', 'source', 'img', 'banner');
+const HERO_INDEX = path.join(__dirname, '..', 'source', '_data', 'hero-slides.json');
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif', '.bmp', '.svg']);
 
-/** 列出 banner 文件夹里的图片（按文件名排序） */
+/** 读 R2 轮播图清单（由 tools/sync.js 扫描 R2 的 banner/ 目录生成） */
+function readR2Images() {
+  try {
+    if (!fs.existsSync(HERO_INDEX)) return [];
+    const data = JSON.parse(fs.readFileSync(HERO_INDEX, 'utf8'));
+    const list = data && Array.isArray(data.images) ? data.images : [];
+    const base = String((data && data.base) || '').replace(/\/+$/, '');
+    if (!base || !list.length) return [];
+    return list.map(
+      k => `${base}/cdn-cgi/image/width=1920,quality=85,format=auto,onerror=redirect/${k}`
+    );
+  } catch (err) {
+    return [];
+  }
+}
+
+/** 列出轮播图：优先用 R2 的清单，没有就退回本地文件夹 */
 function listBannerImages() {
+  const fromR2 = readR2Images();
+  if (fromR2.length) return fromR2;
+
+  // 降级：本地 source/img/banner/
   if (!fs.existsSync(BANNER_DIR)) return [];
   let files;
   try {

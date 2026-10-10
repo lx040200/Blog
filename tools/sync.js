@@ -35,6 +35,11 @@ const INDEX_OUT = path.join(DATA_DIR, 'photo-index.json');
 const MAP_OUT = path.join(DATA_DIR, 'photo-map.json');
 const ALBUMS_FILE = path.join(DATA_DIR, 'albums.yml');
 const MANUAL_GPS_FILE = path.join(DATA_DIR, 'photo-gps.yml');
+const HERO_OUT = path.join(DATA_DIR, 'hero-slides.json');
+
+// 首页轮播图放这个目录：它们是「背景大图」，不算相册照片 —— 下面要专门把它们排除掉，
+// 否则会混进相册页里。
+const BANNER_PREFIX = 'banner/';
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.tif', '.tiff', '.avif']);
 const CONCURRENCY = 6;
@@ -97,8 +102,18 @@ async function main() {
   const objects = await listObjects(env, n => process.stdout.write('\r  已列出 ' + n + ' 个对象'));
   process.stdout.write('\n');
 
+  // 首页轮播图单独挑出来 —— 它们是背景大图，不是相册照片
+  const bannerKeys = objects
+    .filter(o => !o.key.endsWith('/'))
+    .filter(o => o.key.startsWith(BANNER_PREFIX))
+    .filter(o => IMAGE_EXT.has(path.extname(o.key).toLowerCase()))
+    .map(o => o.key)
+    .sort();
+
   const photos = objects
     .filter(o => !o.key.endsWith('/'))
+    // 轮播图不算相册照片，跳过（否则会混进相册页）
+    .filter(o => !o.key.startsWith(BANNER_PREFIX))
     .filter(o => IMAGE_EXT.has(path.extname(o.key).toLowerCase()))
     .map(o => {
       const segs = o.key.split('/');
@@ -137,11 +152,21 @@ async function main() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   writeIndex();
 
+  // 首页轮播图的清单 —— 只存路径，完整地址由 scripts/hero-slides.js 自己拼（跟照片一个套路）
+  fs.writeFileSync(
+    HERO_OUT,
+    JSON.stringify({ generated: new Date().toISOString(), base, images: bannerKeys }, null, 0),
+    'utf8'
+  );
+
   console.log('\n──────── 目录 ────────');
   console.log(`照片：${photos.length} 张`);
   console.log(`地点目录：${dirs.size} 个`);
   console.log(`合计：${formatSize(totalBytes)}`);
   console.log(`已写出：${INDEX_OUT}`);
+  if (bannerKeys.length) {
+    console.log(`首页轮播图：${bannerKeys.length} 张（取自 banner/ 目录，不算进相册）`);
+  }
 
   // 把扫到的照片同步进 albums.yml 的 photos 段
   // （保留你写的说明文字和文件注释，只增删照片行；空桶时不动）
